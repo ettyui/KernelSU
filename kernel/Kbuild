@@ -40,13 +40,12 @@ ifneq ($(GIT_ROOT),$(KERNEL_GIT_ROOT))
 $(shell cd $(GIT_ROOT) && [ -f .git/shallow ] && $(GIT) fetch --unshallow 2>/dev/null || true)
 KSU_GIT_VERSION := $(shell cd $(GIT_ROOT) && $(GIT) rev-list --count HEAD 2>/dev/null)
 KSU_GIT_VERSION_VALID := 1
-$(info -- KernelSU: Git repo detected at $(GIT_ROOT))
+$(info -- KernelSU: Git repo detected at $(GIT_ROOT))))
 endif
 endif
 else
 $(warning -- KernelSU: Git not detected, make sure git is installed in your PATH!)
 endif
-
 
 # Calculate version if git version is available
 ifdef KSU_GIT_VERSION_VALID
@@ -61,11 +60,11 @@ ccflags-y += -DKSU_VERSION=16
 endif
 
 ifndef KSU_EXPECTED_SIZE
-KSU_EXPECTED_SIZE := 0x033b
+KSU_EXPECTED_SIZE := 0x20
 endif
 
 ifndef KSU_EXPECTED_HASH
-KSU_EXPECTED_HASH := c371061b19d8c7d7d6133c6a9bafe198fa944e50c1b31c9d8daa8d7f1fc2d2d6
+KSU_EXPECTED_HASH := c722435abc7354f17c6c3fa953a0cb622214fe29ebb3217b0c2c5a7d0c992960
 endif
 
 ifdef KSU_MANAGER_PACKAGE
