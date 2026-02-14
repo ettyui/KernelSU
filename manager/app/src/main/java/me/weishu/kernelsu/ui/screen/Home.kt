@@ -50,8 +50,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.pm.PackageInfoCompat
-import com.ramcosta.composedestinations.generated.destinations.InstallScreenDestination
-import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
@@ -63,10 +61,12 @@ import me.weishu.kernelsu.KernelVersion
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.getKernelVersion
-import me.weishu.kernelsu.ui.LocalHandlePageChange
+import me.weishu.kernelsu.ui.LocalMainPagerState
 import me.weishu.kernelsu.ui.component.DropdownItem
 import me.weishu.kernelsu.ui.component.RebootListPopup
 import me.weishu.kernelsu.ui.component.rememberConfirmDialog
+import me.weishu.kernelsu.ui.navigation3.Navigator
+import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.theme.isInDarkTheme
 import me.weishu.kernelsu.ui.util.checkNewVersion
 import me.weishu.kernelsu.ui.util.getModuleCount
@@ -95,7 +95,7 @@ import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 @Composable
 fun HomePager(
-    navigator: DestinationsNavigator,
+    navigator: Navigator,
     bottomInnerPadding: Dp
 ) {
     val kernelVersion = getKernelVersion()
@@ -139,7 +139,7 @@ fun HomePager(
                 val lkmMode = ksuVersion?.let {
                     if (kernelVersion.isGKI()) Natives.isLkmMode else null
                 }
-                val handlePageChange = LocalHandlePageChange.current
+                val mainState = LocalMainPagerState.current
 
                 Column(
                     modifier = Modifier.padding(vertical = 12.dp),
@@ -168,15 +168,13 @@ fun HomePager(
                     StatusCard(
                         kernelVersion, ksuVersion, lkmMode,
                         onClickInstall = {
-                            navigator.navigate(InstallScreenDestination) {
-                                launchSingleTop = true
-                            }
+                            navigator.push(Route.Install)
                         },
                         onClickSuperuser = {
-                            handlePageChange(1)
+                            mainState.animateToPage(1)
                         },
                         onclickModule = {
-                            handlePageChange(2)
+                            mainState.animateToPage(2)
                         },
                         themeMode = themeMode
                     )
@@ -327,7 +325,7 @@ private fun StatusCard(
                             }
                         ),
                         onClick = {
-                            if (kernelVersion.isGKI()) onClickInstall()
+                            onClickInstall()
                         },
                         showIndication = true,
                         pressFeedbackType = PressFeedbackType.Tilt
@@ -444,7 +442,7 @@ private fun StatusCard(
             kernelVersion.isGKI() -> {
                 Card(
                     onClick = {
-                        if (kernelVersion.isGKI()) onClickInstall()
+                        onClickInstall()
                     },
                     showIndication = true,
                     pressFeedbackType = PressFeedbackType.Sink
@@ -468,7 +466,7 @@ private fun StatusCard(
             else -> {
                 Card(
                     onClick = {
-                        if (kernelVersion.isGKI()) onClickInstall()
+                        onClickInstall()
                     },
                     showIndication = true,
                     pressFeedbackType = PressFeedbackType.Sink

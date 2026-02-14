@@ -63,8 +63,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.capsule.ContinuousRoundedRectangle
-import com.ramcosta.composedestinations.generated.destinations.AppProfileScreenDestination
-import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
@@ -77,6 +75,8 @@ import me.weishu.kernelsu.ksuApp
 import me.weishu.kernelsu.ui.component.AppIconImage
 import me.weishu.kernelsu.ui.component.SearchBox
 import me.weishu.kernelsu.ui.component.SearchPager
+import me.weishu.kernelsu.ui.navigation3.Navigator
+import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.theme.isInDarkTheme
 import me.weishu.kernelsu.ui.util.ownerNameForUid
 import me.weishu.kernelsu.ui.util.pickPrimary
@@ -107,7 +107,7 @@ import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 @Composable
 fun SuperUserPager(
-    navigator: DestinationsNavigator,
+    navigator: Navigator,
     bottomInnerPadding: Dp
 ) {
     val viewModel = viewModel<SuperUserViewModel>()
@@ -115,13 +115,15 @@ fun SuperUserPager(
     val searchStatus by viewModel.searchStatus
 
     val context = LocalContext.current
+    var isInitialized by rememberSaveable { mutableStateOf(false) }
     val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     LaunchedEffect(Unit) {
         when {
-            viewModel.appList.value.isEmpty() -> {
+            !isInitialized || viewModel.appList.value.isEmpty() -> {
                 viewModel.showSystemApps = prefs.getBoolean("show_system_apps", false)
                 viewModel.loadAppList()
+                isInitialized = true
             }
 
             viewModel.isNeedRefresh -> {
@@ -239,9 +241,7 @@ fun SuperUserPager(
                                     }
                                 },
                             ) {
-                                navigator.navigate(AppProfileScreenDestination(group.primary)) {
-                                    launchSingleTop = true
-                                }
+                                navigator.push(Route.AppProfile(group.primary.packageName))
                                 viewModel.markNeedRefresh()
                             }
                             AnimatedVisibility(
@@ -281,7 +281,7 @@ fun SuperUserPager(
             val pullToRefreshState = rememberPullToRefreshState()
             LaunchedEffect(isRefreshing) {
                 if (isRefreshing) {
-                    delay(350)
+                    delay(150)
                     viewModel.loadAppList(force = true)
                     isRefreshing = false
                 }
@@ -356,9 +356,7 @@ fun SuperUserPager(
                                             }
                                         }
                                     ) {
-                                        navigator.navigate(AppProfileScreenDestination(group.primary)) {
-                                            launchSingleTop = true
-                                        }
+                                        navigator.push(Route.AppProfile(group.primary.packageName))
                                         viewModel.markNeedRefresh()
                                     }
                                     AnimatedVisibility(
@@ -429,7 +427,17 @@ private data class GroupedApps(
     val primary: SuperUserViewModel.AppInfo,
     val anyAllowSu: Boolean,
     val anyCustom: Boolean,
+    val shouldUmount: Boolean,
 )
+
+private val uidShouldUmountCache = mutableMapOf<Int, Boolean>()
+
+private fun uidShouldUmountCached(uid: Int): Boolean {
+    uidShouldUmountCache[uid]?.let { return it }
+    val value = Natives.uidShouldUmount(uid)
+    uidShouldUmountCache[uid] = value
+    return value
+}
 
 private fun buildGroups(apps: List<SuperUserViewModel.AppInfo>): List<GroupedApps> {
     val comparator = compareBy<SuperUserViewModel.AppInfo> {
@@ -442,12 +450,14 @@ private fun buildGroups(apps: List<SuperUserViewModel.AppInfo>): List<GroupedApp
     val groups = apps.groupBy { it.uid }.map { (uid, list) ->
         val sorted = list.sortedWith(comparator)
         val primary = pickPrimary(sorted)
+        val shouldUmount = uidShouldUmountCached(uid)
         GroupedApps(
             uid = uid,
             apps = sorted,
             primary = primary,
             anyAllowSu = sorted.any { it.allowSu },
             anyCustom = sorted.any { it.hasCustomProfile },
+            shouldUmount = shouldUmount,
         )
     }
     return groups.sortedWith(Comparator { a, b ->
@@ -455,7 +465,7 @@ private fun buildGroups(apps: List<SuperUserViewModel.AppInfo>): List<GroupedApp
             g.anyAllowSu -> 0
             g.anyCustom -> 1
             g.apps.size > 1 -> 2
-            Natives.uidShouldUmount(g.uid) -> 4
+            g.shouldUmount -> 4
             else -> 3
         }
 
@@ -478,32 +488,26 @@ private fun GroupItem(
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
     val isDark = isInDarkTheme(prefs.getInt("color_mode", 0))
-    val colorScheme = colorScheme
-    val bg = remember(colorScheme) { colorScheme.secondaryContainer.copy(alpha = 0.8f) }
-    val rootBg = remember(colorScheme) { colorScheme.tertiaryContainer.copy(alpha = 0.6f) }
-    val unmountBg = remember(isDark, colorScheme) {
-        if (isDark) Color.White.copy(alpha = 0.4f) else Color.Black.copy(alpha = 0.3f)
-    }
-    val fg = remember(colorScheme) { colorScheme.onSecondaryContainer }
-    val rootFg = remember(colorScheme) { colorScheme.onTertiaryContainer.copy(alpha = 0.8f) }
-    val unmountFg = remember(isDark, colorScheme) {
-        if (isDark) Color.Black.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.8f)
-    }
+    val bg = colorScheme.secondaryContainer.copy(alpha = 0.8f)
+    val rootBg = colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+    val unmountBg = if (isDark) Color.White.copy(alpha = 0.4f) else Color.Black.copy(alpha = 0.3f)
+    val fg = colorScheme.onSecondaryContainer
+    val rootFg = colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+    val unmountFg = if (isDark) Color.Black.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.8f)
+
     val userId = group.uid / 100000
     val packageInfo = group.primary.packageInfo
     val applicationInfo = packageInfo.applicationInfo
     val hasSharedUserId = !packageInfo.sharedUserId.isNullOrEmpty()
     val isSystemApp = applicationInfo?.flags?.and(ApplicationInfo.FLAG_SYSTEM) != 0
             || applicationInfo.flags.and(ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-    val tags = remember(group, colorScheme, isDark) {
-        buildList {
-            if (group.anyAllowSu) add(StatusMeta("ROOT", rootBg, rootFg))
-            if (Natives.uidShouldUmount(group.uid)) add(StatusMeta("UMOUNT", unmountBg, unmountFg))
-            if (group.anyCustom) add(StatusMeta("CUSTOM", bg, fg))
-            if (userId != 0) add(StatusMeta("USER $userId", bg, fg))
-            if (isSystemApp) add(StatusMeta("SYSTEM", bg, fg))
-            if (hasSharedUserId) add(StatusMeta("SHARED UID", bg, fg))
-        }
+    val tags = buildList {
+        if (group.anyAllowSu) add(StatusMeta("ROOT", rootBg, rootFg))
+        if (group.shouldUmount) add(StatusMeta("UMOUNT", unmountBg, unmountFg))
+        if (group.anyCustom) add(StatusMeta("CUSTOM", bg, fg))
+        if (userId != 0) add(StatusMeta("USER $userId", bg, fg))
+        if (isSystemApp) add(StatusMeta("SYSTEM", bg, fg))
+        if (hasSharedUserId) add(StatusMeta("SHARED UID", bg, fg))
     }
     Card(
         modifier = Modifier
@@ -522,8 +526,8 @@ private fun GroupItem(
                 packageInfo = group.primary.packageInfo,
                 label = group.primary.label,
                 modifier = Modifier
-                    .padding(end = 12.dp)
-                    .size(46.dp)
+                    .padding(end = 14.dp)
+                    .size(48.dp)
             )
             Column(
                 modifier = Modifier

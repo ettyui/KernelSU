@@ -53,6 +53,8 @@ class ModuleViewModel : ViewModel() {
         val hasWebUi: Boolean,
         val hasActionScript: Boolean,
         val metamodule: Boolean,
+        val actionIconPath: String?,
+        val webUiIconPath: String?,
     )
 
     @Immutable
@@ -170,56 +172,57 @@ class ModuleViewModel : ViewModel() {
         ).thenBy(Collator.getInstance(Locale.getDefault()), ModuleInfo::id)
     }
 
-    fun fetchModuleList() {
-        viewModelScope.launch {
-            withContext(Dispatchers.Main) { isRefreshing = true }
+    suspend fun loadModuleList() {
+        val parsedModules = withContext(Dispatchers.IO) {
+            kotlin.runCatching {
+                val result = listModules()
+                Log.i(TAG, "result: $result")
+                val array = JSONArray(result)
+                (0 until array.length())
+                    .asSequence()
+                    .map { array.getJSONObject(it) }
+                    .map { obj ->
+                        ModuleInfo(
+                            obj.getString("id"),
+                            obj.optString("name"),
+                            obj.optString("author", "Unknown"),
+                            obj.optString("version", "Unknown"),
+                            obj.optInt("versionCode", 0),
+                            obj.optString("description"),
+                            obj.getBoolean("enabled"),
+                            obj.optBoolean("update"),
+                            obj.getBoolean("remove"),
+                            obj.optString("updateJson"),
+                            obj.optBoolean("web"),
+                            obj.optBoolean("action"),
+                            (obj.optInt("metamodule") != 0) or obj.optBoolean("metamodule"),
+                            obj.optString("actionIcon").takeIf { it.isNotBlank() },
+                            obj.optString("webuiIcon").takeIf { it.isNotBlank() }
+                        )
+                    }.toList()
+            }.getOrElse {
+                Log.e(TAG, "fetchModuleList: ", it)
+                emptyList()
+            }
+        }
 
-            val oldModuleList = modules
+        withContext(Dispatchers.Main) {
+            modules = parsedModules
+            isNeedRefresh = false
+        }
+    }
+
+    fun fetchModuleList(checkUpdate: Boolean = false) {
+        viewModelScope.launch {
+            withContext(Dispatchers.Main) {
+                isRefreshing = true
+            }
+
             val start = SystemClock.elapsedRealtime()
 
+            loadModuleList()
 
-            val parsedModules = withContext(Dispatchers.IO) {
-                kotlin.runCatching {
-                    val result = listModules()
-                    Log.i(TAG, "result: $result")
-                    val array = JSONArray(result)
-                    (0 until array.length())
-                        .asSequence()
-                        .map { array.getJSONObject(it) }
-                        .map { obj ->
-                            ModuleInfo(
-                                obj.getString("id"),
-                                obj.optString("name"),
-                                obj.optString("author", "Unknown"),
-                                obj.optString("version", "Unknown"),
-                                obj.optInt("versionCode", 0),
-                                obj.optString("description"),
-                                obj.getBoolean("enabled"),
-                                obj.optBoolean("update"),
-                                obj.getBoolean("remove"),
-                                obj.optString("updateJson"),
-                                obj.optBoolean("web"),
-                                obj.optBoolean("action"),
-                                (obj.optInt("metamodule") != 0) or obj.optBoolean("metamodule")
-                            )
-                        }.toList()
-                }.getOrElse {
-                    Log.e(TAG, "fetchModuleList: ", it)
-                    emptyList()
-                }
-            }
-
-            withContext(Dispatchers.Main) {
-                modules = parsedModules
-                isNeedRefresh = false
-                if (oldModuleList === modules) {
-                    isRefreshing = false
-                }
-            }
-
-            if (parsedModules.isNotEmpty()) {
-                syncModuleUpdateInfo(parsedModules)
-            }
+            if (checkUpdate) syncModuleUpdateInfo(modules)
 
             withContext(Dispatchers.Main) {
                 isRefreshing = false
@@ -310,7 +313,7 @@ class ModuleViewModel : ViewModel() {
             ).execute()
             Log.d(TAG, "checkUpdate code: ${response.code}")
             if (response.isSuccessful) {
-                response.body?.string() ?: ""
+                response.body.string()
             } else {
                 ""
             }

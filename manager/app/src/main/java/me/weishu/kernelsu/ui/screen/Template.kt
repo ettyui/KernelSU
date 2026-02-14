@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.captionBar
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
@@ -67,12 +69,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.ramcosta.composedestinations.annotation.Destination
-import com.ramcosta.composedestinations.annotation.RootGraph
-import com.ramcosta.composedestinations.generated.destinations.TemplateEditorScreenDestination
-import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import com.ramcosta.composedestinations.result.ResultRecipient
-import com.ramcosta.composedestinations.result.getOr
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
@@ -83,12 +79,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.DropdownItem
+import me.weishu.kernelsu.ui.navigation3.LocalNavigator
+import me.weishu.kernelsu.ui.navigation3.Navigator
+import me.weishu.kernelsu.ui.navigation3.Route
+import me.weishu.kernelsu.ui.util.isNetworkAvailable
 import me.weishu.kernelsu.ui.viewmodel.TemplateViewModel
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.ListPopupDefaults
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -97,6 +98,7 @@ import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
 import top.yukonga.miuix.kmp.extra.SuperListPopup
@@ -115,25 +117,26 @@ import top.yukonga.miuix.kmp.utils.scrollEndHaptic
  */
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
-@Destination<RootGraph>
 fun AppProfileTemplateScreen(
-    navigator: DestinationsNavigator,
-    resultRecipient: ResultRecipient<TemplateEditorScreenDestination, Boolean>
 ) {
+    val navigator = LocalNavigator.current
     val viewModel = viewModel<TemplateViewModel>()
     val scope = rememberCoroutineScope()
     val scrollBehavior = MiuixScrollBehavior()
 
     LaunchedEffect(Unit) {
         if (viewModel.templateList.isEmpty()) {
-            viewModel.fetchTemplates()
+            scope.launch { viewModel.fetchTemplates() }
         }
     }
 
-    // handle result from TemplateEditorScreen, refresh if needed
-    resultRecipient.onNavResult { result ->
-        if (result.getOr { false }) {
-            scope.launch { viewModel.fetchTemplates() }
+    val requestKey = "template_edit"
+    LaunchedEffect(Unit) {
+        navigator.observeResult<Boolean>(requestKey).collect { success ->
+            if (success) {
+                navigator.clearResult(requestKey)
+                scope.launch { viewModel.fetchTemplates() }
+            }
         }
     }
 
@@ -182,7 +185,7 @@ fun AppProfileTemplateScreen(
                 }
             }
             TopBar(
-                onBack = dropUnlessResumed { navigator.popBackStack() },
+                onBack = dropUnlessResumed { navigator.pop() },
                 onSync = {
                     scope.launch { viewModel.fetchTemplates(true) }
                 },
@@ -226,9 +229,7 @@ fun AppProfileTemplateScreen(
                 containerColor = colorScheme.primary,
                 shadowElevation = 0.dp,
                 onClick = {
-                    navigator.navigate(TemplateEditorScreenDestination(TemplateViewModel.TemplateInfo(), false)) {
-                        launchSingleTop = true
-                    }
+                    navigator.navigateForResult(Route.TemplateEditor(TemplateViewModel.TemplateInfo(), false), requestKey)
                 },
                 modifier = Modifier
                     .offset(y = offsetHeight)
@@ -251,11 +252,44 @@ fun AppProfileTemplateScreen(
         popupHost = { },
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal)
     ) { innerPadding ->
+        val context = LocalContext.current
+        val offline = !isNetworkAvailable(context)
+        if (viewModel.templateList.isEmpty()) {
+            val layoutDirection = LocalLayoutDirection.current
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        start = innerPadding.calculateStartPadding(layoutDirection),
+                        end = innerPadding.calculateEndPadding(layoutDirection),
+                        bottom = innerPadding.calculateBottomPadding(),
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (offline) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(text = stringResource(R.string.network_offline), color = colorScheme.onSurfaceVariantSummary, fontSize = 16.sp)
+                        Spacer(Modifier.height(12.dp))
+                        TextButton(
+                            modifier = Modifier
+                                .padding(horizontal = 24.dp)
+                                .fillMaxWidth(),
+                            text = stringResource(R.string.network_retry),
+                            onClick = {
+                                scope.launch { viewModel.fetchTemplates() }
+                            },
+                        )
+                    }
+                } else {
+                    InfiniteProgressIndicator()
+                }
+            }
+        }
         var isRefreshing by rememberSaveable { mutableStateOf(false) }
         val pullToRefreshState = rememberPullToRefreshState()
         LaunchedEffect(isRefreshing) {
             if (isRefreshing) {
-                delay(350)
+                delay(150)
                 viewModel.fetchTemplates()
                 isRefreshing = false
             }
@@ -311,18 +345,13 @@ fun AppProfileTemplateScreen(
 
 @Composable
 private fun TemplateItem(
-    navigator: DestinationsNavigator,
+    navigator: Navigator,
     template: TemplateViewModel.TemplateInfo
 ) {
     Card(
         modifier = Modifier.padding(bottom = 12.dp),
         onClick = {
-            navigator.navigate(TemplateEditorScreenDestination(template, !template.local)) {
-                popUpTo(TemplateEditorScreenDestination) {
-                    inclusive = true
-                }
-                launchSingleTop = true
-            }
+            navigator.navigateForResult(Route.TemplateEditor(template, !template.local), "template_edit")
         },
         showIndication = true,
         pressFeedbackType = PressFeedbackType.Sink
