@@ -2,7 +2,7 @@ name: Build Manager
 
 on:
   push:
-    branches: [ "main", "dev", "ci" ]
+    branches: [ "main", "dev", "ci", "master" ]
     paths:
       - '.github/workflows/build-manager.yml'
       - '.github/workflows/build-lkm.yml'
@@ -10,6 +10,7 @@ on:
       - 'manager/**'
       - 'kernel/**'
       - 'userspace/**'
+      - 'scripts/ksubot.py'
   pull_request:
     branches: [ "main", "dev" ]
     paths:
@@ -19,7 +20,9 @@ on:
       - 'manager/**'
       - 'kernel/**'
       - 'userspace/**'
+      - 'scripts/ksubot.py'
   workflow_call:
+  workflow_dispatch:
 
 jobs:
   build-lkm:
@@ -38,6 +41,8 @@ jobs:
             os: ubuntu-latest
           - target: x86_64-linux-android
             os: ubuntu-latest
+          - target: armv7-linux-androideabi
+            os: ubuntu-latest
     uses: ./.github/workflows/ksud.yml
     with:
       target: ${{ matrix.target }}
@@ -50,6 +55,10 @@ jobs:
         include:
           - target: x86_64-pc-windows-gnu # windows pc
             os: ubuntu-latest
+          - target: x86_64-apple-darwin # Intel mac
+            os: macos-latest
+          - target: aarch64-apple-darwin # M chip mac
+            os: macos-latest
           - target: aarch64-unknown-linux-musl # arm64 Linux
             os: ubuntu-latest
           - target: x86_64-unknown-linux-musl # x86 Linux
@@ -72,6 +81,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Custom package name
+        run: bash custom.sh
+
       - name: Setup need_upload
         id: need_upload
         run: |
@@ -82,16 +94,16 @@ jobs:
           fi
 
       - name: Write key
-        if: ${{ ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' )) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name != 'pull_request' || github.ref_type == 'tag' }}
         run: |
-          if [ ! -z "${{ secrets.KEYSTORE }}" ]; then
+          if [ ! -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             {
               echo KEYSTORE_PASSWORD='${{ secrets.KEYSTORE_PASSWORD }}'
               echo KEY_ALIAS='${{ secrets.KEY_ALIAS }}'
               echo KEY_PASSWORD='${{ secrets.KEY_PASSWORD }}'
               echo KEYSTORE_FILE='key.jks'
             } >> gradle.properties
-            echo ${{ secrets.KEYSTORE }} | base64 -d > key.jks
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > key.jks
           fi
 
       - name: Setup Java
@@ -118,26 +130,34 @@ jobs:
           name: ksud-x86_64-linux-android
           path: .
 
+      - name: Download arm ksud
+        uses: actions/download-artifact@v5
+        with:
+          name: ksud-armv7-linux-androideabi
+          path: .
+
       - name: Copy ksud to app jniLibs
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
           mkdir -p app/src/main/jniLibs/x86_64
           cp -f ../aarch64-linux-android/release/ksud ../manager/app/src/main/jniLibs/arm64-v8a/libksud.so
           cp -f ../x86_64-linux-android/release/ksud ../manager/app/src/main/jniLibs/x86_64/libksud.so
+          mkdir -p app/src/main/jniLibs/armeabi-v7a
+          cp -f ../armv7-linux-androideabi/release/ksud ../manager/app/src/main/jniLibs/armeabi-v7a/libksud.so
 
       - name: Build with Gradle
         run: ./gradlew clean assembleRelease
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v6
-        if: ${{ ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' )) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name != 'pull_request' || github.ref_type == 'tag' }}
         with:
           name: manager
           path: manager/app/build/outputs/apk/release/*.apk
 
       - name: Upload mappings
         uses: actions/upload-artifact@v6
-        if: ${{ ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' )) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name != 'pull_request' || github.ref_type == 'tag' }}
         with:
           name: "mappings"
           path: "manager/app/build/outputs/mapping/release/"
@@ -153,11 +173,10 @@ jobs:
       - name: Upload to telegram
         if: github.event_name != 'pull_request' && steps.need_upload.outputs.UPLOAD == 'true'
         env:
-          CHAT_ID: ${{ secrets.CHAT_ID }}
+          CHAT_ID: ${{ vars.CHAT_ID }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          MESSAGE_THREAD_ID: ${{ secrets.MESSAGE_THREAD_ID }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-          COMMIT_URL: ${{ github.event.head_commit.url }}
+          MESSAGE_THREAD_ID: ${{ vars.MESSAGE_THREAD_ID }}
+          GITHUB_EVENT: ${{ toJson(github.event) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           TITLE: Manager
           BRANCH: ${{ github.ref_name }}
