@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# ====== 自定义配置 ======
 word1="com"
 word2="chaozh"
 word3="iReaderFree"
@@ -24,9 +23,9 @@ find . -type f -exec sed -i \
 echo "正在修改应用名称为: $APP_NAME"
 find res -name "strings.xml" -exec sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$APP_NAME<\/string>/g" {} \;
 
-# ====== 4. 修改图标（暂不启用，代码已注释）======
+# ====== 4. 图标功能（暂不启用，代码已注释）======
 # echo "正在替换应用图标..."
-# 如果你以后需要启用图标功能，可以：
+# 以后需要时，可以：
 # 1. 先把图标文件放到仓库的某个目录（比如 custom_icons/）
 # 2. 取消下面的注释，并根据实际目录调整路径
 
@@ -43,9 +42,10 @@ find res -name "strings.xml" -exec sed -i "s/<string name=\"app_name\">.*<\/stri
 # wget -O res/mipmap-xxxhdpi/ic_launcher.png https://example.com/ic_launcher.png
 
 # 方法 C：使用 base64 解码（需要先把图标转成 base64）
-# echo "图标 base64 字符串" | base64 -d > res/mipmap-hdpi/ic_launcher.png
-# echo "图标 base64 字符串" | base64 -d > res/mipmap-xhdpi/ic_launcher.png
-# echo "图标 base64 字符串" | base64 -d > res/mipmap-xxhdpi/ic_launcher.png
-# echo "图标 base64 字符串" | base64 -d > res/mipmap-xxxhdpi/ic_launcher.png
+# 示例：base64 图标文件后，把字符串贴在这里
+# echo "iVBORw0KGgoAAAANSUhEUgAA..." | base64 -d > res/mipmap-hdpi/ic_launcher.png
+# echo "iVBORw0KGgoAAAANSUhEUgAA..." | base64 -d > res/mipmap-xhdpi/ic_launcher.png
+# echo "iVBORw0KGgoAAAANSUhEUgAA..." | base64 -d > res/mipmap-xxhdpi/ic_launcher.png
+# echo "iVBORw0KGgoAAAANSUhEUgAA..." | base64 -d > res/mipmap-xxxhdpi/ic_launcher.png
 
 echo "Done."
