@@ -1,75 +1,15 @@
 name: Build Manager
 
 on:
-  push:
-    branches: [ "main", "dev", "ci", "master" ]
-    paths:
-      - '.github/workflows/build-manager.yml'
-      - '.github/workflows/build-lkm.yml'
-      - '.github/workflows/ksud.yml'
-      - 'manager/**'
-      - 'kernel/**'
-      - 'userspace/**'
-      - 'scripts/ksubot.py'
-  pull_request:
-    branches: [ "main", "dev" ]
-    paths:
-      - '.github/workflows/build-manager.yml'
-      - '.github/workflows/build-lkm.yml'
-      - '.github/workflows/ksud.yml'
-      - 'manager/**'
-      - 'kernel/**'
-      - 'userspace/**'
-      - 'scripts/ksubot.py'
-  workflow_call:
   workflow_dispatch:
 
 jobs:
   build-lkm:
-    uses: ./.github/workflows/build-lkm.yml
+    uses: ./.github/workflows/build-lkm-custom.yml
     secrets: inherit
 
-  build-ksuinit:
-    uses: ./.github/workflows/ksuinit.yml
-
-  build-ksud:
-    needs: [build-lkm, build-ksuinit]
-    strategy:
-      matrix:
-        include:
-          - target: aarch64-linux-android
-            os: ubuntu-latest
-          - target: x86_64-linux-android
-            os: ubuntu-latest
-          - target: armv7-linux-androideabi
-            os: ubuntu-latest
-    uses: ./.github/workflows/ksud.yml
-    with:
-      target: ${{ matrix.target }}
-      os: ${{ matrix.os }}
-
-  build-ksud-extra:
-    needs: [build-lkm, build-ksuinit]
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-pc-windows-gnu # windows pc
-            os: ubuntu-latest
-          - target: x86_64-apple-darwin # Intel mac
-            os: macos-latest
-          - target: aarch64-apple-darwin # M chip mac
-            os: macos-latest
-          - target: aarch64-unknown-linux-musl # arm64 Linux
-            os: ubuntu-latest
-          - target: x86_64-unknown-linux-musl # x86 Linux
-            os: ubuntu-latest
-    uses: ./.github/workflows/ksud.yml
-    with:
-      target: ${{ matrix.target }}
-      os: ${{ matrix.os }}
-
   build-manager:
-    needs: build-ksud
+    needs: build-lkm
     runs-on: ubuntu-latest
     defaults:
       run:
