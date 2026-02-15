@@ -94,13 +94,18 @@ jobs:
       - name: List downloaded LKM files
         run: |
           echo "下载的 LKM 文件列表："
-          ls -la ../lkm/
-          find ../lkm -name "*.ko" -type f
+          if [ -d "../lkm" ]; then
+            ls -la ../lkm/
+            find ../lkm -name "*.ko" -type f
+          else
+            echo "⚠️ ../lkm 目录不存在"
+            exit 1
+          fi
 
       - name: Copy LKM to assets
         run: |
           mkdir -p app/src/main/assets
-          # 查找 .ko 文件
+          # 查找 .ko 文件（可能在子目录里）
           KO_FILE=$(find ../lkm -name "*.ko" -type f | head -1)
           if [ -f "$KO_FILE" ]; then
             cp "$KO_FILE" app/src/main/assets/kernelsu.ko
