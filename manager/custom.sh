@@ -13,6 +13,10 @@ find . -depth -type d -name 'me' -execdir mv {} "$word1" \;
 find . -depth -type d -name 'weishu' -execdir mv {} "$word2" \;
 find . -depth -type d -name 'kernelsu' -execdir mv {} "$word3" \;
 
+# 调试：显示重命名后的目录结构
+echo "重命名后的关键目录："
+find . -type d -name "*$word1*" -o -name "*$word2*" -o -name "*$word3*" | head -10
+
 # ====== 2. 修改包名（替换文件内容）======
 echo "正在替换文件中的包名..."
 find . -type f -exec sed -i \
@@ -20,9 +24,17 @@ find . -type f -exec sed -i \
     -e "s/me\/weishu\/kernelsu/$word1\/$word2\/$word3/g" \
     -e "s/me_weishu_kernelsu/${word1}_${word2}_${word3}/g" {} +
 
+# 调试：显示几个替换后的文件示例
+echo "替换后的包名示例："
+grep -r "$word1.$word2.$word3" --include="*.kt" --include="*.java" | head -5
+
 # ====== 3. 修改应用名称（精准匹配）======
 echo "正在修改应用名称为: $APP_NAME"
 sed -i 's/<string name="app_name" translatable="false">KernelSU<\/string>/<string name="app_name" translatable="false">'"$APP_NAME"'<\/string>/' app/src/main/res/values/strings.xml
+
+# 调试：显示修改后的 app_name
+echo "修改后的 app_name："
+grep "app_name" app/src/main/res/values/strings.xml
 
 # ====== 4. 图标功能（暂不启用，代码已注释）======
 # echo "正在替换应用图标..."
