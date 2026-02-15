@@ -20,9 +20,9 @@ find . -type f -exec sed -i \
     -e "s/me\/weishu\/kernelsu/$word1\/$word2\/$word3/g" \
     -e "s/me_weishu_kernelsu/${word1}_${word2}_${word3}/g" {} +
 
-# ====== 3. 修改应用名称 ======
+# ====== 3. 修改应用名称（精准匹配）======
 echo "正在修改应用名称为: $APP_NAME"
-find app/src/main/res -name "strings.xml" -exec sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$APP_NAME<\/string>/g" {} \;
+sed -i 's/<string name="app_name" translatable="false">KernelSU<\/string>/<string name="app_name" translatable="false">'"$APP_NAME"'<\/string>/' app/src/main/res/values/strings.xml
 
 # ====== 4. 图标功能（暂不启用，代码已注释）======
 # echo "正在替换应用图标..."
