@@ -2,16 +2,9 @@ name: Build Manager
 
 on:
   workflow_dispatch:
-    inputs:
-      build_lkm:
-        description: '是否编译 LKM 模块'
-        required: true
-        default: true
-        type: boolean
 
 jobs:
   build-lkm:
-    if: ${{ github.event.inputs.build_lkm == 'true' }}
     uses: ./.github/workflows/build-lkm-custom.yml
     secrets: inherit
 
@@ -32,7 +25,6 @@ jobs:
 
   build-manager:
     needs: build-ksud
-    if: ${{ always() }}
     runs-on: ubuntu-latest
     defaults:
       run:
