@@ -26,7 +26,6 @@ jobs:
   build-manager:
     needs: build-ksud
     runs-on: ubuntu-latest
-    secrets: inherit
     defaults:
       run:
         working-directory: ./manager
