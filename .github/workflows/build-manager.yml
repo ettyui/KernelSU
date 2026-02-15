@@ -26,6 +26,7 @@ jobs:
   build-manager:
     needs: build-ksud
     runs-on: ubuntu-latest
+    secrets: inherit
     defaults:
       run:
         working-directory: ./manager
@@ -37,6 +38,7 @@ jobs:
           fetch-depth: 0
 
       - name: Custom package name
+        working-directory: ./manager
         run: bash custom.sh
 
       - name: Setup need_upload
@@ -49,7 +51,6 @@ jobs:
           fi
 
       - name: Write key
-        if: ${{ github.event_name != 'pull_request' || github.ref_type == 'tag' }}
         run: |
           if [ ! -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             {
