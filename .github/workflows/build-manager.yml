@@ -2,14 +2,37 @@ name: Build Manager
 
 on:
   workflow_dispatch:
+    inputs:
+      build_lkm:
+        description: '是否编译 LKM 模块'
+        required: true
+        default: true
+        type: boolean
 
 jobs:
   build-lkm:
+    if: ${{ github.event.inputs.build_lkm == 'true' }}
     uses: ./.github/workflows/build-lkm-custom.yml
     secrets: inherit
 
+  build-ksuinit:
+    uses: ./.github/workflows/ksuinit.yml
+
+  build-ksud:
+    needs: [build-lkm, build-ksuinit]
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-linux-android
+            os: ubuntu-latest
+    uses: ./.github/workflows/ksud-custom.yml
+    with:
+      target: ${{ matrix.target }}
+      os: ${{ matrix.os }}
+
   build-manager:
-    needs: build-lkm
+    needs: build-ksud
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -64,26 +87,10 @@ jobs:
           name: ksud-aarch64-linux-android
           path: .
 
-      - name: Download x86_64 ksud
-        uses: actions/download-artifact@v7
-        with:
-          name: ksud-x86_64-linux-android
-          path: .
-
-      - name: Download arm ksud
-        uses: actions/download-artifact@v5
-        with:
-          name: ksud-armv7-linux-androideabi
-          path: .
-
       - name: Copy ksud to app jniLibs
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
-          mkdir -p app/src/main/jniLibs/x86_64
           cp -f ../aarch64-linux-android/release/ksud ../manager/app/src/main/jniLibs/arm64-v8a/libksud.so
-          cp -f ../x86_64-linux-android/release/ksud ../manager/app/src/main/jniLibs/x86_64/libksud.so
-          mkdir -p app/src/main/jniLibs/armeabi-v7a
-          cp -f ../armv7-linux-androideabi/release/ksud ../manager/app/src/main/jniLibs/armeabi-v7a/libksud.so
 
       - name: Build with Gradle
         run: ./gradlew clean assembleRelease
