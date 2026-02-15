@@ -84,29 +84,23 @@ jobs:
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cp -f ../aarch64-linux-android/release/ksud ../manager/app/src/main/jniLibs/arm64-v8a/libksud.so
 
-      # ====== 下载 LKM 并打包进 APK ======
+      # ====== 下载 LKM 并打包进 APK（使用绝对路径）======
       - name: Download LKM artifact
         uses: actions/download-artifact@v7
         with:
           name: android15-6.6-lkm
-          path: ../lkm
+          path: ${{ github.workspace }}/lkm
 
       - name: List downloaded LKM files
         run: |
           echo "下载的 LKM 文件列表："
-          if [ -d "../lkm" ]; then
-            ls -la ../lkm/
-            find ../lkm -name "*.ko" -type f
-          else
-            echo "⚠️ ../lkm 目录不存在"
-            exit 1
-          fi
+          ls -la ${{ github.workspace }}/lkm/
+          find ${{ github.workspace }}/lkm -name "*.ko" -type f
 
       - name: Copy LKM to assets
         run: |
           mkdir -p app/src/main/assets
-          # 查找 .ko 文件（可能在子目录里）
-          KO_FILE=$(find ../lkm -name "*.ko" -type f | head -1)
+          KO_FILE=$(find ${{ github.workspace }}/lkm -name "*.ko" -type f | head -1)
           if [ -f "$KO_FILE" ]; then
             cp "$KO_FILE" app/src/main/assets/kernelsu.ko
             echo "✅ LKM 已复制到 assets: $KO_FILE"
